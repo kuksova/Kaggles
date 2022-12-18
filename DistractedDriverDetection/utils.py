@@ -18,31 +18,33 @@ def make_prediction(model, loader):
     for x, files in tqdm(loader):
         x = x.to(config.DEVICE)
         with torch.no_grad():
-            scores = model(x) # use cross entropy loss as simple
-            probs1 = torch.softmax(scores, dim=0)
+            scores = model(x) # # Returns predictions; use cross entropy loss as simple
+            probs1 = torch.softmax(scores, dim=1) #
             #nm = probs.sum(dim=0) # is equal 1
             probs.append((probs1.cpu().numpy()))
             filenames +=files
 
     # Submission file
+    probs = np.round(probs, 2)
     predictions_out = pd.DataFrame(columns=['img', 'c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9'])
     for i in range(len(probs)):
         predictions_out.loc[i, 'img'] = filenames[i]
 
         predictions_out.loc[i, 'c0':'c9'] = probs[i]
 
-    predictions_out.to_csv('submission.csv', index=False)
+    predictions_out.to_csv('./submission.csv', index=False)
 
     #df = pd.DataFrame() # how to this through column?
     # df = pd.DataFrame(list(zip(*[list1, list2, list3]))).add_prefix('Col')
     #df = pd.DataFrame({"img": filenames, "likelihood": probs}).add_prefix('c')
     print("Done with predictions")
 
-def check_accuracy(loader, model, device="cuda"):
+def check_accuracy(loader, model, criterion, device):
     model.eval()
     all_preds, all_labels = [], []
     num_correct = 0
     num_samples = 0
+    loss_value_history = []
 
     for i_step, (x, y) in enumerate(loader): #x,y in tqdm(loader):
         x = x.to(device=device)
@@ -54,17 +56,19 @@ def check_accuracy(loader, model, device="cuda"):
             num_correct +=(predictions == y).sum()
             num_samples += predictions.shape[0]
 
+            loss_value = criterion(scores, y)
+
             # add to lists to be going to send to sklearn to
             all_preds.append(predictions.detach().cpu().numpy())
             all_labels.append(y.detach().cpu().numpy())
 
-        #model.train()
-        kappa = np.concatenate(all_preds, axis=0, dtype=np.int64), np.concatenate(
-            all_labels, axis=0, dtype=np.int64)
-        accur = float(num_correct) / num_samples
-        return kappa, accur
+    model.train()
+    kappa = np.concatenate(all_preds, axis=0, dtype=np.int64), np.concatenate(
+    all_labels, axis=0, dtype=np.int64)
+    accur = float(num_correct) / num_samples
+    return kappa, accur, loss_value
 
-""""
+
 def save_checkpoint(state, filename="my_checkpoint.pth.tar"):
     print("=> Saving checkpoint")
     torch.save(state, filename)
@@ -79,4 +83,4 @@ def load_checkpoint(checkpoint, model, optimizer, lr):
     # and it will lead to many hours of debugging \:
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
-"""
+
